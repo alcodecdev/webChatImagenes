@@ -1,10 +1,240 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>Analizador Cósmico - Clasificación de Imágenes</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+    <style>
+        /* ================================================= */
+        /* == TEMA: ESPACIAL OSCURO Y ALTA TECNOLOGÍA == */
+        /* ================================================= */
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            /* Fondo oscuro profundo (similar al espacio) */
+            background-color: #0d1117;
+            /* Color de texto base (blanco azulado) */
+            color: #c9d1d9;
+            margin: 0;
+            padding-top: 50px;
+        }
+
+        /* Contenedor principal para centrar el contenido */
+        #main-container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 30px;
+            /* Fondo ligeramente más claro para el panel */
+            background-color: #161b22;
+            border-radius: 12px;
+            /* Resplandor sutil (como la luz de una estrella) */
+            box-shadow: 0 0 20px rgba(0, 188, 212, 0.1);
+        }
+
+        h1 {
+            color: #00bcd4; /* Azul cian brillante para un toque futurista */
+            font-weight: 400;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 25px;
+            text-shadow: 0 0 5px rgba(0, 188, 212, 0.7);
+        }
+
+        /* Estilo del botón de seleccionar imagen */
+        button {
+            background-color: #6200EE; /* Color de acento púrpura */
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: background-color 0.3s, box-shadow 0.3s;
+            margin-top: 15px;
+            box-shadow: 0 0 10px rgba(98, 0, 238, 0.4);
+        }
+
+        button:hover {
+            background-color: #7b2cff;
+            box-shadow: 0 0 15px rgba(98, 0, 238, 0.7);
+        }
+
+        /* Estilo para la imagen cargada */
+        #image-display img {
+            max-width: 100%;
+            height: auto;
+            margin: 30px auto;
+            /* Borde con un ligero resplandor azul */
+            border: 2px solid #00bcd4;
+            box-shadow: 0 0 15px rgba(0, 188, 212, 0.6);
+            border-radius: 8px;
+            display: block;
+        }
+
+        /* Contenedores de carga y contenido */
+        #loading-message {
+            color: #00bcd4;
+            font-size: 1.2em;
+            padding: 30px 0;
+        }
+
+        /* Estilo para los resultados de la clasificación */
+        #label-container {
+            margin-top: 30px;
+        }
+        #label-container div {
+            padding: 12px;
+            margin-bottom: 10px;
+            background-color: #21262d; /* Fondo oscuro para cada resultado */
+            border-radius: 5px;
+            font-size: 1.2em;
+            text-align: left;
+            transition: all 0.3s;
+            /* Sombra interior sutil para efecto de panel */
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+            border: 1px solid #30363d;
+        }
+
+        /* Resaltar la predicción más alta */
+        #label-container div[style*="bold"] {
+            border-left: 6px solid #00bcd4;
+            background-color: #2c333b;
+            color: white;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
 
+<div id="main-container">
+
+    <h1>Analizador Cósmico</h1>
+
+    <label for="file-input">
+        <button type="button" onclick="document.getElementById('file-input').click()">
+            Seleccionar Imagen
+        </button>
+    </label>
+    <input type="file" id="file-input" accept="image/*" onchange="handleImageUpload(event)" style="display: none;">
+
+    <div id="loading-message">
+        <p>Cargando modelo de clasificación estelar...</p>
+    </div>
+
+    <div id="content" style="display: none;">
+        <div id="image-display"></div>
+        <div id="label-container"></div>
+    </div>
+
+</div>
+
+
+<script type="text/javascript">
+
+    // 🚨 RUTA LOCAL DE TU MODELO DESCARGADO 🚨
+    const modelURLPath = "./my_local_model/";
+
+    let model, labelContainer, maxPredictions;
+
+    // Función que se ejecuta al cargar la página para inicializar el modelo
+    async function init() {
+        const modelURL = modelURLPath + "model.json";
+        const metadataURL = modelURLPath + "metadata.json";
+
+        try {
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            labelContainer = document.getElementById("label-container");
+            for (let i = 0; i < maxPredictions; i++) {
+                labelContainer.appendChild(document.createElement("div"));
+            }
+
+            // Oculta el mensaje de carga y muestra el contenido principal
+            document.getElementById('loading-message').style.display = 'none';
+            document.getElementById('content').style.display = 'block';
+
+        } catch (error) {
+            document.getElementById('loading-message').innerHTML = '<p style="color: red;">¡Error! El modelo no pudo cargar. Asegúrate de usar un servidor local (HTTP).</p>';
+            console.error("Error al cargar el modelo:", error);
+        }
+    }
+
+    // Carga el modelo tan pronto como el script se ejecute
+    init();
+
+    // Maneja la selección y visualización de la imagen
+    function handleImageUpload(event) {
+        if (!model) {
+            alert("El modelo aún no ha terminado de cargar.");
+            return;
+        }
+
+        const file = event.target.files[0];
+        if (!file) return;
+
+        // Limpiar resultados anteriores
+        document.getElementById("image-display").innerHTML = '';
+        for (let i = 0; i < maxPredictions; i++) {
+            labelContainer.childNodes[i].innerHTML = "Analizando...";
+            labelContainer.childNodes[i].style.fontWeight = "normal";
+            labelContainer.childNodes[i].style.color = "#c9d1d9";
+            labelContainer.childNodes[i].style.borderLeft = "none";
+        }
+
+        // Crear y mostrar el elemento <img>
+        const img = document.createElement('img');
+        img.onload = () => {
+            predict(img);
+            // Liberar la URL del objeto creado
+            window.URL.revokeObjectURL(img.src);
+        };
+
+        // Usa el objeto global window.URL para crear la URL temporal del archivo
+        img.src = window.URL.createObjectURL(file);
+
+        document.getElementById("image-display").appendChild(img);
+    }
+
+    // Ejecuta la clasificación
+    async function predict(imageElement) {
+        const prediction = await model.predict(imageElement);
+
+        for (let i = 0; i < maxPredictions; i++) {
+            const className = prediction[i].className;
+            const probability = prediction[i].probability;
+
+            // Definimos el color de la probabilidad
+            let probColor = "#E0E0E0";
+            if (probability > 0.9) {
+                probColor = "#56F0D0"; // Verde menta brillante
+            } else if (probability > 0.7) {
+                probColor = "#00bcd4"; // Cian
+            } else {
+                probColor = "#ffeb3b"; // Amarillo
+            }
+
+            const classPrediction =
+                `${className}: <span style="color: ${probColor};">${(probability * 100).toFixed(2)}%</span>`;
+
+            labelContainer.childNodes[i].innerHTML = classPrediction;
+
+            // Resaltado temático del resultado más probable
+            if (i === 0) {
+                labelContainer.childNodes[i].style.fontWeight = "bold";
+                labelContainer.childNodes[i].style.color = "white";
+                labelContainer.childNodes[i].style.borderLeft = "5px solid #00bcd4"; // Activando el estilo CSS
+            } else {
+                labelContainer.childNodes[i].style.fontWeight = "normal";
+                labelContainer.childNodes[i].style.color = "#c9d1d9";
+                labelContainer.childNodes[i].style.borderLeft = "none";
+            }
+        }
+    }
+</script>
 </body>
 </html>
